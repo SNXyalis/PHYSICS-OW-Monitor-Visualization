@@ -1,0 +1,2565 @@
+[
+    {
+        "id": "a198f2db823f30da",
+        "type": "tab",
+        "label": "PEF LG ACTION",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "8b81c4b76d40c840",
+        "type": "tab",
+        "label": "Flow 2",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "789351ac.02c9d",
+        "type": "subflow",
+        "name": "PollTOPushConverterFC",
+        "info": "This helper node aims at performing synchronous calls for polling in case of an async API (calls that return prior to completion, e.g. in the case of non blocking calls in OW, the initial request is returned with a submission success and an activation id in order to follow up on the result). The main difference from the main PollTOPushConverter is that it supports also function chaining (through a msg.functionChain or UI set boolean parameter).\n\nThe according function should return as a response the following structure:\n- have a result.status field with the 'Completed' (if chain is finished) or 'Continuing' string if the function has handed over to a new function in the chain.\n- have a result.newActivationIDURL field that indicates the updated ID with which to check the follow-up action's status \n\nThe node also can get credentials from the msg.creds field of the input message.\n\nThe remaining operations are similar with the standard PollTOPushConverter. The node does polling to a specific endpoint in order to detect whether the function has successfully finished\n\nThe node has three outputs:\n - Output 1 indicates successful finalization of the API call\n - Output 2 indicates intermediate failure and was added to return the reason for failure\n - Output 3 indicates final failure after max attempts\n\nCurrently the node assumes that in case of failure we get a >=40X return code, but this may not always be the case.\n\nThe node can be configured for the URL (msg.url), the HTTP method (msg.method), the maximum attempts (msg.maxAttempts), polling period (msg.pollPeriod), the status code above which to retry (msg.retryCode) and the status code for deciding the final success (msg.acceptCode). The msg properties override the UI set properties.\n\nGiven that conditions upon which the initial call needs to be polled are highly dependent on the used API, the node assumes that the initial call has been performed a priori.\n\nCredentials for accessing the HTTP endpoint can be set via msg.creds or through the UI (input msg prevails).\n \n",
+        "category": "PHYSICS Helpers",
+        "in": [
+            {
+                "x": 60,
+                "y": 160,
+                "wires": [
+                    {
+                        "id": "7d194c10.33b51c"
+                    }
+                ]
+            }
+        ],
+        "out": [
+            {
+                "x": 1380,
+                "y": 40,
+                "wires": [
+                    {
+                        "id": "f9d0aba7.72382",
+                        "port": 0
+                    },
+                    {
+                        "id": "1bbc6fa0.4879c",
+                        "port": 0
+                    }
+                ]
+            },
+            {
+                "x": 780,
+                "y": 260,
+                "wires": [
+                    {
+                        "id": "c2cf68b7.263d4",
+                        "port": 0
+                    }
+                ]
+            },
+            {
+                "x": 780,
+                "y": 360,
+                "wires": [
+                    {
+                        "id": "c2cf68b7.263d4",
+                        "port": 1
+                    }
+                ]
+            }
+        ],
+        "env": [
+            {
+                "name": "maxAttempts",
+                "type": "str",
+                "value": "3"
+            },
+            {
+                "name": "pollPeriod",
+                "type": "str",
+                "value": "3000"
+            },
+            {
+                "name": "method",
+                "type": "str",
+                "value": ""
+            },
+            {
+                "name": "url",
+                "type": "str",
+                "value": "http://10.100.59.182:3233/api/v1/namespaces/_/activations/"
+            },
+            {
+                "name": "retryCode",
+                "type": "num",
+                "value": "202"
+            },
+            {
+                "name": "acceptCode",
+                "type": "num",
+                "value": "200"
+            },
+            {
+                "name": "functionChain",
+                "type": "bool",
+                "value": "true"
+            }
+        ],
+        "meta": {},
+        "color": "#b4e8a9"
+    },
+    {
+        "id": "69bc50ec.ed1228",
+        "type": "subflow",
+        "name": "PHYSICS Load Generator",
+        "info": "\n\nThe subflow implements a load generator, that can be used to generate load against a target\nendpoint. It can be used directly in Node-RED (example flow included), but it can also be used as a function inside Openwhisk.\nThe function flow listens on the POST /run endpoint, in which it accepts the requests.\n\nThe node is configured through the msg, in the following fields:\n{\n - \"testName\":\"example test name\",\n - \"delay\":6000, //the inter-request delay for each invocation\n - \"testDuration\":60000, //total experiment duration in milliseconds\n - \"clientNumber\":0, //if one needs to deploy multiple clients, this can be used as a client ID\n - \"totalClients\":1, //total clients involved in the experiment\n - \"creds\":\"user:key\", //credentials on the OW infrastructure\n - \"endpointMethod\":\"GET\", //method to use against the target endpoint (the target of the load generator)\n - \"targetEndpoint\":\"http://10.100.59.182:3233/api/v1/web/guest/default/dockeraction.json?delay=1000\", //the target of the load generator, in this case an example other action in OW\n - \"methodPayload\": \"STRINGIFIED JSON input for POST calls on target endpoint\",\n - \"statusEndpoint\":\"http://10.100.59.182:3233/api/v1/namespaces/_/activations/\", //OW endpoint from which to retrieve the activation status\n - \"loadGenEndpoint\":\"http://10.100.59.182:3233/api/v1/namespaces/guest/actions/physicspef_loadgenclient\", //endpoint to initiate a new Load Generator, used in the function chaining process\n - \"nodeType\":\"physics_openwhisk:faas\", //used when the load generator runs as an action, alternatively the physics_openwhisk:local may be used for execution only inside Node-RED\n - \"otherInfo\":\"1000\", //tag for the experiment\n - \"status\":\"Started\",\n - \"parentSampleTime\":1652035259312, //this should be a timestamp just before the call is made to the load Generator\n - \"globalStartTime\":1652035259312 //this should be a timestamp just before the call is made to the load Generator\n}\n\nThe output produces a variety of metrics, along with the raw data from the measurements. Example:\n{\n -    \"achievedAverageRate\":4.73,\n -    \"action\":\"dockeraction\",\n -    \"actualStartTime\":1652036057734,\n -    \"averageDuration\":6969.6,\n -    \"averageInitTime\":3941.2,\n -    \"averageStartLatency\":1790.6,\n -    \"averageUserSideDelay\":8760.2,\n -    \"averageWaitTime\":1755.4,\n -    \"clientNumber\":0,\n -    \"coldStarts\":3,\n -    \"globalStartTime\":1652036048322,\n -    \"inputData\":{\n -      \"clientNumber\":0,\n -      \"creds\":\"23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP\",\n -       \"delay\":6000,\n -       \"endpointMethod\":\"GET\",\n -       \"globalStartTime\":1652036048322,\n -       \"loadGenEndpoint\":\"http://10.100.59.182:3233/api/v1/namespaces/guest/actions/physicspef_loadgenclient\",\n -       \"nodeType\":\"physics_openwhisk:faas\",\n -       \"otherInfo\":\"1000\",\n -       \"parentSampleTime\":1652036048322,\n -       \"rawData\":[\n -          {\n -             \"action\":\"dockeraction\",\n -             \"actualStartTime\":1652036057734,\n -             \"clientNumber\":0,\n -             \"clientSample\":1652036063739,\n -             \"duration\":9617,\n -             \"end\":1652036076399,\n -             \"globalStartTime\":1652036048322,\n -             \"initTime\":6587,\n -             \"memory\":256,\n -             \"namespace\":\"guest\",\n -             \"otherInfo\":1000,\n -             \"parentSampleTime\":1652036048322,\n -             \"setRate\":10,\n -             \"start\":1652036066782,\n -             \"success\":\"true\",\n -             \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n -             \"testSetDuration\":60000,\n -             \"waitTime\":2912\n -          },\n -          {\n -             \"action\":\"dockeraction\",\n -             \"actualStartTime\":1652036057734,\n -             \"clientNumber\":0,\n -             \"clientSample\":1652036069739,\n -             \"duration\":9588,\n -             \"end\":1652036082130,\n -             \"globalStartTime\":1652036048322,\n -             \"initTime\":6560,\n -             \"memory\":256,\n -             \"namespace\":\"guest\",\n -             \"otherInfo\":1000,\n -             \"parentSampleTime\":1652036048322,\n -             \"setRate\":10,\n -             \"start\":1652036072542,\n -             \"success\":\"true\",\n -             \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n -             \"testSetDuration\":60000,\n -             \"waitTime\":2787\n -          },\n -          {\n -             \"action\":\"dockeraction\",\n -             \"actualStartTime\":1652036057734,\n -             \"clientNumber\":0,\n -             \"clientSample\":1652036081741,\n -             \"duration\":3035,\n -             \"end\":1652036084958,\n -             \"globalStartTime\":1652036048322,\n -             \"initTime\":0,\n -             \"memory\":256,\n -             \"namespace\":\"guest\",\n -             \"otherInfo\":1000,\n -             \"parentSampleTime\":1652036048322,\n -             \"setRate\":10,\n -             \"start\":1652036081923,\n -             \"success\":\"true\",\n -             \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n -             \"testSetDuration\":60000,\n -             \"waitTime\":173\n -          },\n -          {\n -             \"action\":\"dockeraction\",\n -             \"actualStartTime\":1652036057734,\n -             \"clientNumber\":0,\n -             \"clientSample\":1652036075740,\n -             \"duration\":9591,\n -             \"end\":1652036088111,\n -             \"globalStartTime\":1652036048322,\n -             \"initTime\":6559,\n -             \"memory\":256,\n -             \"namespace\":\"guest\",\n -             \"otherInfo\":1000,\n -             \"parentSampleTime\":1652036048322,\n -             \"setRate\":10,\n -             \"start\":1652036078520,\n -             \"success\":\"true\",\n -             \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n -             \"testSetDuration\":60000,\n -             \"waitTime\":2770\n -          },\n -          {\n -             \"action\":\"dockeraction\",\n -             \"actualStartTime\":1652036057734,\n -             \"clientNumber\":0,\n -             \"clientSample\":1652036087744,\n -             \"duration\":3017,\n -             \"end\":1652036090906,\n -             \"globalStartTime\":1652036048322,\n -             \"initTime\":0,\n -             \"memory\":256,\n -             \"namespace\":\"guest\",\n -             \"otherInfo\":1000,\n -             \"parentSampleTime\":1652036048322,\n -             \"setRate\":10,\n -             \"start\":1652036087889,\n -             \"success\":\"true\",\n -             \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n -             \"testSetDuration\":60000,\n -             \"waitTime\":135\n -          }\n -       ],\n -       \"status\":\"Completed\",\n -       \"statusEndpoint\":\"http://10.100.59.182:3233/api/v1/namespaces/_/activations/\",\n -       \"targetEndpoint\":\"http://10.100.59.182:3233/api/v1/web/guest/default/dockeraction.json?delay=1000\",\n -       \"testDuration\":60000,\n -       \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n -       \"totalClients\":1\n -    },\n -    \"launchGeneratorDelay\":9412,\n -    \"memory\":256,\n -    \"otherInfo\":\"1000\",\n -    \"parentSampleTime\":1652036048322,\n -    \"sampleNumber\":5,\n -    \"setRate\":10,\n -    \"status\":\"Completed\",\n -    \"stdDevDuration\":3219.96,\n -    \"stdDevInitTime\":3217.99,\n -    \"stdDevStartLatency\":1331.76,\n -    \"stdDevUserSideDelay\":4549.64,\n -    \"stdDevWaitTime\":1308.51,\n -    \"successPercentage\":100,\n -    \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n -    \"testSetDuration\":60000,\n -    \"totalClients\":1\n}",
+        "category": "PHYSICS PEF",
+        "in": [
+            {
+                "x": 40,
+                "y": 180,
+                "wires": [
+                    {
+                        "id": "deab292d.6a2cf"
+                    },
+                    {
+                        "id": "2cc78fc6.99be28"
+                    }
+                ]
+            }
+        ],
+        "out": [
+            {
+                "x": 1120,
+                "y": 140,
+                "wires": [
+                    {
+                        "id": "15333913.7aa347",
+                        "port": 0
+                    }
+                ]
+            },
+            {
+                "x": 1120,
+                "y": 240,
+                "wires": [
+                    {
+                        "id": "494b4f60.d425",
+                        "port": 1
+                    }
+                ]
+            }
+        ],
+        "env": [],
+        "meta": {},
+        "color": "#3FADB5",
+        "icon": "font-awesome/fa-bar-chart-o"
+    },
+    {
+        "id": "8262c8e75cfbabdd",
+        "type": "subflow",
+        "name": "OW Monitor",
+        "info": "\n\nThis is a subflow node in order to monitor the latest performance (sliding window) of Openwhisk actions. The flow pings periodically the target Openwhisk installation in order to retrieve the last executed actions and extract statistics from their execution.\n\nConfiguration includes:\n - the polling time of the monitor (default 30 seconds, `msg.pollingPeriod`)\n - the target Openwhisk endpoint (`msg.targetEndpoint`)\n - credentials for that endpoint (`msg.creds`) in the form of user:key\n - the window of time (in minutes) in the past for which you want to retrieve results (`msg.window`)\n - an optional action name (`msg.action`), if one wants to filter specific action activations\n\nThe configuration can be set either via the flow UI or the incoming message. The incoming message prevails over the UI-set value.\n\nThe monitor can be stopped via a `msg.stop=true` message. The subflow uses a flow variable in order to control starting and stopping, hence only one OW monitor should be used in each flow.\n\nThe results include the raw data acquired (`msg.payload.rawData`) in the last window of time, as well as the moving averages of duration (`msg.payload.results.movingAverageDuration`), init time (`msg.payload.results.movingAverageInitTime`) and wait time (`msg.payload.results.movingAverageWaitTime`) of the window. The number of cold starts are also included (`msg.payload.results.coldStarts`) as well as the percentage with relation to the total calls (`msg.payload.results.coldStartPercentage`).\n\n\n",
+        "category": "PHYSICS PEF",
+        "in": [
+            {
+                "x": 60,
+                "y": 80,
+                "wires": [
+                    {
+                        "id": "408b32b6eb687a08"
+                    }
+                ]
+            }
+        ],
+        "out": [
+            {
+                "x": 820,
+                "y": 180,
+                "wires": [
+                    {
+                        "id": "fdcd7c09df04efbb",
+                        "port": 0
+                    }
+                ]
+            },
+            {
+                "x": 560,
+                "y": 80,
+                "wires": [
+                    {
+                        "id": "e3862e86d11b08d5",
+                        "port": 0
+                    }
+                ]
+            }
+        ],
+        "env": [
+            {
+                "name": "targetEndpoint",
+                "type": "str",
+                "value": "http://10.100.59.182:3233/api/v1",
+                "ui": {
+                    "label": {
+                        "en-US": "Target Endpoint"
+                    }
+                }
+            },
+            {
+                "name": "pollingPeriod",
+                "type": "num",
+                "value": "30",
+                "ui": {
+                    "label": {
+                        "en-US": "Polling Period (seconds)"
+                    }
+                }
+            },
+            {
+                "name": "window",
+                "type": "num",
+                "value": "10",
+                "ui": {
+                    "label": {
+                        "en-US": "Window of Time (minutes)"
+                    }
+                }
+            },
+            {
+                "name": "namespace",
+                "type": "str",
+                "value": "guest",
+                "ui": {
+                    "label": {
+                        "en-US": "Namespace"
+                    }
+                }
+            },
+            {
+                "name": "action",
+                "type": "str",
+                "value": "",
+                "ui": {
+                    "label": {
+                        "en-US": "Optional Action Name"
+                    }
+                }
+            },
+            {
+                "name": "creds",
+                "type": "cred",
+                "ui": {
+                    "label": {
+                        "en-US": "Credentials (user:key)"
+                    }
+                }
+            }
+        ],
+        "meta": {},
+        "color": "#E9967A",
+        "icon": "node-red/status.svg"
+    },
+    {
+        "id": "2934f390.711324",
+        "type": "tls-config",
+        "z": "789351ac.02c9d",
+        "name": "",
+        "cert": "",
+        "key": "",
+        "ca": "",
+        "certname": "",
+        "keyname": "",
+        "caname": "",
+        "servername": "",
+        "verifyservercert": false
+    },
+    {
+        "id": "77785aca.6e49e4",
+        "type": "tls-config",
+        "z": "69bc50ec.ed1228",
+        "name": "tlsconfig",
+        "cert": "",
+        "key": "",
+        "ca": "",
+        "certname": "",
+        "keyname": "",
+        "caname": "",
+        "servername": "",
+        "verifyservercert": false,
+        "alpnprotocol": ""
+    },
+    {
+        "id": "df3a306242e21be5",
+        "type": "tls-config",
+        "name": "",
+        "cert": "",
+        "key": "",
+        "ca": "",
+        "certname": "",
+        "keyname": "",
+        "caname": "",
+        "servername": "",
+        "verifyservercert": false,
+        "alpnprotocol": ""
+    },
+    {
+        "id": "16c9e9f72a8f3e78",
+        "type": "ui_tab",
+        "name": "Home",
+        "icon": "dashboard",
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "ab2c3ab2053f8f85",
+        "type": "ui_base",
+        "theme": {
+            "name": "theme-light",
+            "lightTheme": {
+                "default": "#0094CE",
+                "baseColor": "#0094CE",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                "edited": true,
+                "reset": false
+            },
+            "darkTheme": {
+                "default": "#097479",
+                "baseColor": "#097479",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                "edited": false
+            },
+            "customTheme": {
+                "name": "Untitled Theme 1",
+                "default": "#4B7930",
+                "baseColor": "#4B7930",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+            },
+            "themeState": {
+                "base-color": {
+                    "default": "#0094CE",
+                    "value": "#0094CE",
+                    "edited": false
+                },
+                "page-titlebar-backgroundColor": {
+                    "value": "#0094CE",
+                    "edited": false
+                },
+                "page-backgroundColor": {
+                    "value": "#fafafa",
+                    "edited": false
+                },
+                "page-sidebar-backgroundColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "group-textColor": {
+                    "value": "#1bbfff",
+                    "edited": false
+                },
+                "group-borderColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "group-backgroundColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "widget-textColor": {
+                    "value": "#111111",
+                    "edited": false
+                },
+                "widget-backgroundColor": {
+                    "value": "#0094ce",
+                    "edited": false
+                },
+                "widget-borderColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "base-font": {
+                    "value": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+                }
+            },
+            "angularTheme": {
+                "primary": "indigo",
+                "accents": "blue",
+                "warn": "red",
+                "background": "grey",
+                "palette": "light"
+            }
+        },
+        "site": {
+            "name": "Node-RED Dashboard",
+            "hideToolbar": "false",
+            "allowSwipe": "false",
+            "lockMenu": "false",
+            "allowTempTheme": "true",
+            "dateFormat": "DD/MM/YYYY",
+            "sizes": {
+                "sx": 48,
+                "sy": 48,
+                "gx": 6,
+                "gy": 6,
+                "cx": 6,
+                "cy": 6,
+                "px": 0,
+                "py": 0
+            }
+        }
+    },
+    {
+        "id": "c554d8a8aa6f6c0e",
+        "type": "ui_group",
+        "name": "Moving Avg Duration",
+        "tab": "16c9e9f72a8f3e78",
+        "order": 1,
+        "disp": true,
+        "width": "6",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "72dcfa4218c95cfd",
+        "type": "ui_group",
+        "name": "Moving Avg Waittime",
+        "tab": "16c9e9f72a8f3e78",
+        "order": 2,
+        "disp": true,
+        "width": "6",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "ed9cdbc891089d9c",
+        "type": "ui_group",
+        "name": "Moving Avg Init time",
+        "tab": "16c9e9f72a8f3e78",
+        "order": 3,
+        "disp": true,
+        "width": "6",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "93b3f6885ccc5f8e",
+        "type": "ui_group",
+        "name": "Cold Start",
+        "tab": "16c9e9f72a8f3e78",
+        "order": 4,
+        "disp": true,
+        "width": "6",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "7d194c10.33b51c",
+        "type": "function",
+        "z": "789351ac.02c9d",
+        "name": "defaults+activation id",
+        "func": "\nif (msg.hasOwnProperty('maxAttempts')){\n    msg.iterations=msg.maxAttempts;\n} else {\n    msg.iterations=env.get('maxAttempts');\n}\n//needed to reset the iterations after function chaining\nmsg.defaultAttempts=msg.iterations;\n\nif (msg.hasOwnProperty('pollPeriod')){\n    \n} else {\n    msg.pollPeriod=env.get('pollPeriod');\n}\n\nif (msg.hasOwnProperty('method')){\n    \n} else {\n    msg.method=env.get('method');\n}\n\nif (msg.hasOwnProperty('url')){\n    \n} else {\n    msg.url=env.get('url');\n}\n\nif (msg.hasOwnProperty('retryCode')){\n    \n} else {\n    msg.retryCode=env.get('retryCode');\n}\n\nif (msg.hasOwnProperty('acceptCode')){\n    \n} else {\n    msg.acceptCode=env.get('acceptCode');\n}\n\nif (msg.hasOwnProperty('creds')){\n    \n} else {\n    msg.creds=env.get('creds');\n}\n\nif (msg.hasOwnProperty('functionChain')){\n    \n} else {\n    msg.functionChain=env.get('functionChain');\n}\n\nif (msg.hasOwnProperty('inputData')){\n    if (msg.inputData.hasOwnProperty('creds')){\n        msg.creds=msg.inputData.creds;\n    }\n}\n\n\n\nmsg.delay=msg.pollPeriod;\nmsg.start=Date.now();\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 200,
+        "y": 160,
+        "wires": [
+            [
+                "cad17b04.a2b4d8"
+            ]
+        ]
+    },
+    {
+        "id": "4be3f205.3e8dc4",
+        "type": "function",
+        "z": "789351ac.02c9d",
+        "name": "iterations--",
+        "func": "msg.iterations=msg.iterations-1;\n/*\nif (flow.get('stop')==true){\n    msg.iterations=-1;\n}*/\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 300,
+        "wires": [
+            [
+                "c2cf68b7.263d4"
+            ]
+        ]
+    },
+    {
+        "id": "c2cf68b7.263d4",
+        "type": "switch",
+        "z": "789351ac.02c9d",
+        "name": "if iterations finished",
+        "property": "iterations",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "gte",
+                "v": "1",
+                "vt": "num"
+            },
+            {
+                "t": "lt",
+                "v": "1",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 550,
+        "y": 300,
+        "wires": [
+            [
+                "cad17b04.a2b4d8"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "76299695.812bd8",
+        "type": "comment",
+        "z": "789351ac.02c9d",
+        "name": "SUCCESS",
+        "info": "",
+        "x": 1100,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "48093072.b17a6",
+        "type": "comment",
+        "z": "789351ac.02c9d",
+        "name": "FINAL FAIL",
+        "info": "",
+        "x": 890,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "d5960f2f.2e9448",
+        "type": "delay",
+        "z": "789351ac.02c9d",
+        "name": "delay",
+        "pauseType": "delayv",
+        "timeout": "5",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "outputs": 1,
+        "x": 170,
+        "y": 300,
+        "wires": [
+            [
+                "4be3f205.3e8dc4"
+            ]
+        ]
+    },
+    {
+        "id": "471b3d64.265894",
+        "type": "http request",
+        "z": "789351ac.02c9d",
+        "name": "",
+        "method": "use",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 590,
+        "y": 160,
+        "wires": [
+            [
+                "8694180b.ec1c68"
+            ]
+        ]
+    },
+    {
+        "id": "8694180b.ec1c68",
+        "type": "switch",
+        "z": "789351ac.02c9d",
+        "name": "Status code check",
+        "property": "statusCode",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "lte",
+                "v": "acceptCode",
+                "vt": "msg"
+            },
+            {
+                "t": "gte",
+                "v": "retryCode",
+                "vt": "msg"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 810,
+        "y": 160,
+        "wires": [
+            [
+                "f9d0aba7.72382"
+            ],
+            [
+                "d5960f2f.2e9448"
+            ]
+        ]
+    },
+    {
+        "id": "ef03414f.ad9d78",
+        "type": "comment",
+        "z": "789351ac.02c9d",
+        "name": "RETRY FAIL",
+        "info": "",
+        "x": 890,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "66bbc0cf.0c62f",
+        "type": "debug",
+        "z": "789351ac.02c9d",
+        "name": "BEFORE AUTH",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "x": 370,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "13791c2d.8cea7c",
+        "type": "debug",
+        "z": "789351ac.02c9d",
+        "name": "URL",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "url",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 580,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "cad17b04.a2b4d8",
+        "type": "function",
+        "z": "789351ac.02c9d",
+        "name": "add auth",
+        "func": "msg.headers={};\nvar auth = 'Basic ' + new Buffer(msg.creds).toString('base64');\nmsg.headers = {\n    \"Authorization\": auth\n}\nmsg.method='GET';\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 160,
+        "wires": [
+            [
+                "471b3d64.265894"
+            ]
+        ]
+    },
+    {
+        "id": "f2b7c4e4.a24c3",
+        "type": "function",
+        "z": "789351ac.02c9d",
+        "name": "adapt to new activation",
+        "func": "\n\nmsg.url=msg.payload.response.result.newActivationIDURL;\nmsg.iterations=msg.defaultAttempts+1;\nconsole.log('IN ADAPTATION TO ACTIVATION',msg.url);\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1500,
+        "y": 160,
+        "wires": [
+            [
+                "d5960f2f.2e9448",
+                "ee1dbf44.7368f8"
+            ]
+        ]
+    },
+    {
+        "id": "c338e47b.b00ed",
+        "type": "comment",
+        "z": "789351ac.02c9d",
+        "name": "FUNCTION CHAIN CONTINUATION",
+        "info": "",
+        "x": 1240,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "ee1dbf44.7368f8",
+        "type": "debug",
+        "z": "789351ac.02c9d",
+        "name": "AFTER CONTINUATION IN Poll2Push",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1420,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "f9d0aba7.72382",
+        "type": "switch",
+        "z": "789351ac.02c9d",
+        "name": "is Chain",
+        "property": "functionChain",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "false"
+            },
+            {
+                "t": "true"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 1020,
+        "y": 160,
+        "wires": [
+            [],
+            [
+                "6da1eea0.969368",
+                "1bbc6fa0.4879c"
+            ]
+        ]
+    },
+    {
+        "id": "6da1eea0.969368",
+        "type": "debug",
+        "z": "789351ac.02c9d",
+        "name": "RESULT STATUS",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1100,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "f20a68d.9711598",
+        "type": "debug",
+        "z": "789351ac.02c9d",
+        "name": "AFTER CODE CHECK",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "functionChain",
+        "targetType": "msg",
+        "x": 890,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "36905e62.dfad92",
+        "type": "debug",
+        "z": "789351ac.02c9d",
+        "name": "TOP1",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1120,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "9610a737.bf275",
+        "type": "debug",
+        "z": "789351ac.02c9d",
+        "name": "TOP2",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1300,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "c52af08f.756ee8",
+        "type": "debug",
+        "z": "789351ac.02c9d",
+        "name": "TOP3",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1600,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "1bbc6fa0.4879c",
+        "type": "function",
+        "z": "789351ac.02c9d",
+        "name": "compare completion",
+        "func": "console.log('IN COMPARE COMPLETION',msg.payload.response);\nif (msg.payload.response.result.status==='Completed'){\n    return [msg,null];\n} else {\n    return [null,msg];\n}\n",
+        "outputs": 2,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1240,
+        "y": 160,
+        "wires": [
+            [
+                "c52af08f.756ee8"
+            ],
+            [
+                "f2b7c4e4.a24c3"
+            ]
+        ]
+    },
+    {
+        "id": "d8305759.866988",
+        "type": "debug",
+        "z": "789351ac.02c9d",
+        "name": "URL",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "iterations",
+        "targetType": "msg",
+        "x": 500,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "3ffcac35.b445b4",
+        "type": "subflow:789351ac.02c9d",
+        "z": "69bc50ec.ed1228",
+        "name": "",
+        "env": [
+            {
+                "name": "maxAttempts",
+                "value": "30",
+                "type": "str"
+            },
+            {
+                "name": "pollPeriod",
+                "value": "20000",
+                "type": "str"
+            },
+            {
+                "name": "method",
+                "value": "GET",
+                "type": "str"
+            },
+            {
+                "name": "url",
+                "value": "172.17.0.1:3233/api/v1/namespaces/_/activations/",
+                "type": "str"
+            }
+        ],
+        "x": 220,
+        "y": 400,
+        "wires": [
+            [
+                "69f956fd.f57888"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "704e205d.6ea2a8",
+        "type": "function",
+        "z": "69bc50ec.ed1228",
+        "name": "add OW activation id from reply",
+        "func": "msg.activationID=msg.headers['x-openwhisk-activation-id'];\nmsg.url=msg.inputData.statusEndpoint+msg.activationID;\n\nmsg.functionChain=false;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 250,
+        "y": 340,
+        "wires": [
+            [
+                "3ffcac35.b445b4"
+            ]
+        ]
+    },
+    {
+        "id": "aaf4fb3f.305de8",
+        "type": "debug",
+        "z": "69bc50ec.ed1228",
+        "name": "RETRY FAIL",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "x": 210,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "40a07acd.82e9dc",
+        "type": "debug",
+        "z": "69bc50ec.ed1228",
+        "name": "FINAL FAIL",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "x": 210,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "f45d31fb.9e8fa8",
+        "type": "http request",
+        "z": "69bc50ec.ed1228",
+        "name": "Target endpoint request",
+        "method": "use",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 230,
+        "y": 240,
+        "wires": [
+            [
+                "78951a98.948494",
+                "48f7b12409cf5b8f"
+            ]
+        ]
+    },
+    {
+        "id": "78951a98.948494",
+        "type": "switch",
+        "z": "69bc50ec.ed1228",
+        "name": "Code check",
+        "property": "statusCode",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "200",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "202",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 190,
+        "y": 280,
+        "wires": [
+            [
+                "704e205d.6ea2a8"
+            ],
+            [
+                "704e205d.6ea2a8"
+            ]
+        ]
+    },
+    {
+        "id": "deab292d.6a2cf",
+        "type": "function",
+        "z": "69bc50ec.ed1228",
+        "name": "produce rate",
+        "func": "\nfunction sayHi(input) {\n  var now=Date.now();\n  \n  console.log('This function duration:',now-msg.actualStartTime);\n  //console.log('Is faas:',msg.inputData.nodeType.includes(\"faas\"));\n  \n  //need to include a condition if it is a local execution, in this case no continuance is needed\n  \n  if (((now-msg.inputData.globalStartTime)>msg.inputData.testDuration)||( ((now-msg.actualStartTime)>220000)&& (msg.inputData.nodeType.includes(\"faas\")) )) {\n    //console.log(\"Duration:\",Date.now()-msg.actualStartTime);\n      msg.filename ='/home/stelios/data/measurements/'+msg.inputData.testName+'_'+msg.inputData.clientNumber+'_'+msg.actualStartTime+'.txt';\n    //this is needed since by the time the generated requests have been made, they might not have finished and get\n    //recorded in the file. So we can wait until OWtimeout-testDuration (plus some safety margin) to return\n    //with whatever data are ready up to then \n    msg.delay=10000;//80000-msg.inputData.testDuration; //delay until timeout of OW in order to process \n    console.log('**************************************TEST DURATION**************************:',now-msg.inputData.globalStartTime);\n    if ((now-msg.inputData.globalStartTime)>msg.inputData.testDuration) {\n        \n        msg.inputData.status='Completed';\n    } else {\n        msg.inputData.status='Continuing';\n    }\n    node.send([RED.util.cloneMessage(msg),null]);\n    clearTimeout(timerId);\n    //global.set('testrunning',false);\n  } else {\n      //console.log(\"Duration:\",Date.now()-msg.actualStartTime);\n      //console.log(\"Limit:\",msg.duration);\n      \n      //needed to check if the client set rate is indeed achieved\n      msg.clientSample=Date.now();\n      flow.set('counter',flow.get('counter')+1);\n      \n      node.send([null,RED.util.cloneMessage(msg)])\n      \n  }\n}\n\n//counter for requests for more reliable achieved rate calculation. if we base it on samples then the delays of a large load will not be \n//counted for and the rate will appear unreasonably small\n\nflow.set('counter',0);\n//actualStartTime should be refreshed in the function chain\n//parentSampleTime should be refreshed in the output if chain has not finished\nmsg.inputData=msg.payload.value;\nmsg.actualStartTime=Date.now();\n\nmsg.headers={};\nvar auth = 'Basic ' + new Buffer(msg.inputData.creds).toString('base64');\nmsg.headers = {\n    \"Authorization\": auth\n}\nmsg.url=msg.inputData.targetEndpoint;\nmsg.method=msg.inputData.endpointMethod;\n\nflow.set('newActivationIDURL',null);\nmsg.payload={};\nmsg.payload=msg.inputData.methodPayload;\n/*\nif (msg.inputData.hasOwnProperty('methodPayload')){\n    msg.payload=JSON.parse(msg.inputData.methodPayload);\n}*/\nvar timerId=setInterval(sayHi, msg.inputData.delay,msg);\n\n//this creates a periodic check which can be useful\n\n\n//return msg;",
+        "outputs": "2",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 190,
+        "y": 180,
+        "wires": [
+            [
+                "f024096a.378218",
+                "c1261105.45a338"
+            ],
+            [
+                "f45d31fb.9e8fa8"
+            ]
+        ]
+    },
+    {
+        "id": "f024096a.378218",
+        "type": "debug",
+        "z": "69bc50ec.ed1228",
+        "name": "END",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 320,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "54dd6d1f.cb74dc",
+        "type": "comment",
+        "z": "69bc50ec.ed1228",
+        "name": "RAW RESULT SPEC",
+        "info": "{\n   \"achievedAverageRate\":4.73,\n   \"action\":\"dockeraction\",\n   \"actualStartTime\":1652036057734,\n   \"averageDuration\":6969.6,\n   \"averageInitTime\":3941.2,\n   \"averageStartLatency\":1790.6,\n   \"averageUserSideDelay\":8760.2,\n   \"averageWaitTime\":1755.4,\n   \"clientNumber\":0,\n   \"coldStarts\":3,\n   \"globalStartTime\":1652036048322,\n   \"inputData\":{}\n    \"rawData\":[\n         {\n            \"action\":\"dockeraction\",\n            \"actualStartTime\":1652036057734,\n            \"clientNumber\":0,\n            \"clientSample\":1652036063739,\n            \"duration\":9617,\n            \"end\":1652036076399,\n            \"globalStartTime\":1652036048322,\n            \"initTime\":6587,\n            \"memory\":256,\n            \"namespace\":\"guest\",\n            \"otherInfo\":1000,\n            \"parentSampleTime\":1652036048322,\n            \"setRate\":10,\n            \"start\":1652036066782,\n            \"success\":\"true\",\n            \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n            \"testSetDuration\":60000,\n            \"waitTime\":2912\n         },...]\n        \"launchGeneratorDelay\":9412,\n   \"memory\":256,\n   \"otherInfo\":\"1000\",\n   \"parentSampleTime\":1652036048322,\n   \"sampleNumber\":5,\n   \"setRate\":10,\n   \"status\":\"Completed\",\n   \"stdDevDuration\":3219.96,\n   \"stdDevInitTime\":3217.99,\n   \"stdDevStartLatency\":1331.76,\n   \"stdDevUserSideDelay\":4549.64,\n   \"stdDevWaitTime\":1308.51,\n   \"successPercentage\":100,\n   \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n   \"testSetDuration\":60000,\n   \"totalClients\":1\n}\nstart, end, waitTime,initTime, memory, duration from OW data\n\ntestname, set rate (delay), parentSampleTime, testSetDuration from input\n\nclientSample from this flow for checking the sample rate\n\n_averageStartLatency_: actualStartTime for checking difference between parentSampleTime (request for the generator)\nand actual startup of the generator\n\n_averageUserDelay_: end timestamp from OW-clientSample could be used to indicate the total time\nof the experienced request from the user side (client),including network\nlatency plus some queues in OW, given that the start time seems to be the start of the action, assuming that the clocks on the two sides (client and server) are synchronized\nthrough e.g. a network clock\n\n_averageStartLatency_:start timestamp from OW-clientSample could be used to indicate network latency as\nwell as any startup delay in OW queues?check the latter, if this start of OW is when\nit was received by the system and not when the action started we would have only\nthe pure network latency. Seems relevant to the waitTime reported by OW, so this metric-waitTime\nwould probably reflect very well the network latency",
+        "x": 1020,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "777ea7fc.a1f5e",
+        "type": "function",
+        "z": "69bc50ec.ed1228",
+        "name": "add data",
+        "func": "//if msg.inputData.rawData exists we need to merge arrays\nif (msg.inputData.hasOwnProperty('rawData')){\n    for (i=0;i<msg.payload.length;i++){\n        msg.inputData.rawData.push(msg.payload[i]);\n    }\n} else {\n    msg.inputData.rawData=msg.payload;    \n}\nmsg.payload={};\nmsg.payload=msg.inputData;\ndelete msg.payload.__ow_method;\ndelete msg.payload.__ow_headers;\ndelete msg.payload.__ow_path;\n//msg.inputData.status='Completed';\n\nif (msg.payload.status==='Completed'){\n    return [msg,null];\n} else {\n    return [null,msg];\n}\n",
+        "outputs": 2,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 760,
+        "y": 180,
+        "wires": [
+            [
+                "15333913.7aa347"
+            ],
+            [
+                "494b4f60.d425",
+                "d4fd287c.00216"
+            ]
+        ]
+    },
+    {
+        "id": "38579517.7e12aa",
+        "type": "file",
+        "z": "69bc50ec.ed1228",
+        "name": "results",
+        "filename": "filename",
+        "filenameType": "msg",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "false",
+        "encoding": "none",
+        "x": 450,
+        "y": 480,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "a511a2d7.4925b",
+        "type": "csv",
+        "z": "69bc50ec.ed1228",
+        "name": "",
+        "sep": ",",
+        "hdrin": "",
+        "hdrout": "",
+        "multi": "one",
+        "ret": "\\n",
+        "temp": "testName,testSetDuration,clientNumber, setRate,globalStartTime,parentSampleTime,actualStartTime,duration,waitTime,initTime,start,end,action,version,concurrency,namespace,memory,success,clientSample,otherInfo,methodPayload",
+        "skip": "0",
+        "strings": true,
+        "include_empty_strings": false,
+        "include_null_values": false,
+        "x": 450,
+        "y": 440,
+        "wires": [
+            [
+                "38579517.7e12aa"
+            ]
+        ]
+    },
+    {
+        "id": "69f956fd.f57888",
+        "type": "function",
+        "z": "69bc50ec.ed1228",
+        "name": "extract results",
+        "func": "msg.results={};\n\n//from OW\nmsg.results.duration=msg.payload.duration;\nmsg.results.start=msg.payload.start;\nmsg.results.end=msg.payload.end;\nmsg.results.action=msg.payload.name;\nmsg.results.version=msg.payload.version;\nmsg.results.namespace=msg.payload.namespace;\nmsg.results.success=msg.payload.response.success;\nfor (let i=0;i<msg.payload.annotations.length;i++){\n    if (msg.payload.annotations[i].key==='waitTime'){\n        msg.results.waitTime=msg.payload.annotations[i].value;\n    }\n    if (msg.payload.annotations[i].key==='initTime'){\n        msg.results.initTime=msg.payload.annotations[i].value;\n    }\n    if (msg.payload.annotations[i].key==='limits'){\n        msg.results.memory=msg.payload.annotations[i].value.memory;\n        msg.results.concurrency=msg.payload.annotations[i].value.concurrency;\n    }\n}\n\nif (!(msg.results.hasOwnProperty('initTime'))){\n    msg.results.initTime=0;\n}\n\n//from this flow\nmsg.results.clientSample=msg.clientSample;//sent prior to sending the request for checking the set rate\n\n//from input\nmsg.results.setRate=60000/msg.inputData.delay;\nmsg.results.testName=msg.inputData.testName;\nmsg.results.clientNumber=msg.inputData.clientNumber;\nmsg.results.parentSampleTime=msg.inputData.parentSampleTime;\nmsg.results.testSetDuration=msg.inputData.testDuration;\nmsg.results.actualStartTime=msg.actualStartTime;\nmsg.results.globalStartTime=msg.inputData.globalStartTime;\n\n\nmsg.results.otherInfo=msg.inputData.otherInfo;\nmsg.results.methodPayload=msg.inputData.methodPayload;\nmsg.payload={};\nmsg.payload=msg.results;\n\n//msg.filename='/data/measurements/'+msg.inputData.testName+'_'+msg.inputData.clientNumber+'_'+msg.actualStartTime+'.txt';\nmsg.filename ='/home/stelios/data/measurements/'+msg.results.testName+'_'+msg.results.clientNumber+'_'+msg.actualStartTime+'.txt';\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 400,
+        "wires": [
+            [
+                "a511a2d7.4925b"
+            ]
+        ]
+    },
+    {
+        "id": "81c23e3b.691c1",
+        "type": "debug",
+        "z": "69bc50ec.ed1228",
+        "name": "RESPONSE",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1160,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "c1261105.45a338",
+        "type": "file in",
+        "z": "69bc50ec.ed1228",
+        "name": "read results",
+        "filename": "filename",
+        "filenameType": "msg",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": false,
+        "encoding": "none",
+        "allProps": false,
+        "x": 470,
+        "y": 180,
+        "wires": [
+            [
+                "d87e5939.9237d8"
+            ]
+        ]
+    },
+    {
+        "id": "d87e5939.9237d8",
+        "type": "csv",
+        "z": "69bc50ec.ed1228",
+        "name": "",
+        "sep": ",",
+        "hdrin": "",
+        "hdrout": "",
+        "multi": "mult",
+        "ret": "\\n",
+        "temp": "testName,testSetDuration,clientNumber, setRate,globalStartTime,parentSampleTime,actualStartTime,duration,waitTime,initTime,start,end,action,version,concurrency,namespace,memory,success,clientSample,otherInfo,methodPayload",
+        "skip": "0",
+        "strings": true,
+        "include_empty_strings": false,
+        "include_null_values": false,
+        "x": 630,
+        "y": 180,
+        "wires": [
+            [
+                "777ea7fc.a1f5e"
+            ]
+        ]
+    },
+    {
+        "id": "b8fdc10c.8fef98",
+        "type": "delay",
+        "z": "69bc50ec.ed1228",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "10",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "outputs": 1,
+        "x": 520,
+        "y": 120,
+        "wires": [
+            [
+                "c1261105.45a338"
+            ]
+        ]
+    },
+    {
+        "id": "f89cf2e5.70f608",
+        "type": "debug",
+        "z": "69bc50ec.ed1228",
+        "name": "CHAIN ACTIVATION",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1130,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "ce63caf6.eda928",
+        "type": "catch",
+        "z": "69bc50ec.ed1228",
+        "name": "",
+        "scope": [
+            "c1261105.45a338"
+        ],
+        "uncaught": false,
+        "x": 510,
+        "y": 80,
+        "wires": [
+            [
+                "b8fdc10c.8fef98"
+            ]
+        ]
+    },
+    {
+        "id": "f74f01b3.f573",
+        "type": "function",
+        "z": "69bc50ec.ed1228",
+        "name": "add OW activation id from reply",
+        "func": "console.log('IN RETURN OF CHAIN ACTIVATION');\nmsg.payload={};\n\nmsg.payload.newActivationIDURL=msg.inputData.statusEndpoint.toString()+msg.headers['x-openwhisk-activation-id'].toString();\nflow.set('newActivationIDURL',msg.inputData.statusEndpoint.toString()+msg.headers['x-openwhisk-activation-id'].toString());\nconsole.log('TO PARSE:',msg.payload.newActivationIDURL);\n\nmsg.payload.status='Continuing';\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 830,
+        "y": 340,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "e31394a6.aa42b8",
+        "type": "http request",
+        "z": "69bc50ec.ed1228",
+        "name": "LOAD GEN CHAIN ACTIVATION",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "77785aca.6e49e4",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 840,
+        "y": 300,
+        "wires": [
+            [
+                "f74f01b3.f573",
+                "f89cf2e5.70f608"
+            ]
+        ]
+    },
+    {
+        "id": "d4fd287c.00216",
+        "type": "function",
+        "z": "69bc50ec.ed1228",
+        "name": "prepare call",
+        "func": "msg.previousHeaders=msg.headers;\n//msg.previousRES=msg.res;\n//msg.previousREQ=msg.req;\n\nmsg.headers={};\nvar auth = 'Basic ' + new Buffer(msg.inputData.creds).toString('base64');\nmsg.headers = {\n    \"Authorization\": auth\n}\nmsg.payload={};\nmsg.payload=msg.inputData;\nmsg.payload.parentSampleTime=Date.now();\n\nmsg.url=msg.inputData.loadGenEndpoint;\nconsole.log('IN PREPARE CALL',msg.payload);\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 770,
+        "y": 260,
+        "wires": [
+            [
+                "e31394a6.aa42b8"
+            ]
+        ]
+    },
+    {
+        "id": "15333913.7aa347",
+        "type": "function",
+        "z": "69bc50ec.ed1228",
+        "name": "results per client",
+        "func": "msg.results={};\nconsole.log('INSIDE RESULT POST PROCESSING',msg.inputData);\nvar samples=msg.inputData.rawData.length;\n//static ---why do we need this, inst it n the inputData?\nmsg.results.sampleNumber=samples;\nmsg.results.memory=msg.payload.rawData[0].memory;\n\nmsg.results.testName=msg.inputData.testName;\n//this might need to be in the dynamic section and take other time stamp as comparison\n//msg.results.launchGeneratorDelay=msg.payload[0].actualStartTime-msg.payload[0].parentSampleTime; \nmsg.results.testSetDuration=msg.payload.rawData[0].testSetDuration;\nmsg.results.clientNumber=msg.inputData.clientNumber;\nmsg.results.actualStartTime=msg.payload.rawData[0].actualStartTime;//this in the end is one of the startTimes of one of the load generators\n//so in the function chain process it is meaningless in the end results\nmsg.results.totalClients=msg.inputData.totalClients;\nmsg.results.parentSampleTime=msg.payload.rawData[0].parentSampleTime;//same as for the case of the actualStartTime\nmsg.results.action=msg.payload.rawData[0].action;\nmsg.results.otherInfo=msg.inputData.otherInfo;\nmsg.results.methodPayload=msg.inputData.methodPayload;\nmsg.results.setRate=60000/msg.inputData.delay;\nmsg.results.globalStartTime=msg.payload.rawData[0].globalStartTime;\n\n//dynamic\nmsg.results.averageDuration=0;\nmsg.results.averageWaitTime=0;\nmsg.results.averageInitTime=0;\nmsg.results.achievedAverageRate=0;\nmsg.results.averageUserSideDelay=0; //end - clientSample\nmsg.results.averageStartLatency=0;//start-clientSample\nmsg.results.successPercentage=0;\nmsg.results.coldStarts=0;\nmsg.results.launchGeneratorDelay=0;\n//deviation?\nvar duration= [];//=new Array();\nvar waitTime=[];\nvar initTime=[];\nvar userSideDelay=[];\nvar startLatency=[];\n//var launchGeneratorDelay=[];\n\n\nmsg.results.achievedAverageRate=toFixedNumber(flow.get('counter')/((Date.now()-msg.results.globalStartTime)/60000),2);\n\nfor (i=0;i<msg.payload.rawData.length;i++){\n    msg.results.averageDuration=msg.results.averageDuration+msg.payload.rawData[i].duration;\n    duration.push(msg.payload.rawData[i].duration);\n    \n    msg.results.launchGeneratorDelay=msg.results.launchGeneratorDelay+(msg.payload.rawData[i].actualStartTime-msg.payload.rawData[i].parentSampleTime);\n    //launchGeneratorDelay.push(msg.payload[i].actualStartTime-msg.payload[i].parentSampleTime);\n    \n    msg.results.averageWaitTime=msg.results.averageWaitTime+msg.payload.rawData[i].waitTime;\n    waitTime.push(msg.payload.rawData[i].waitTime);\n    \n    msg.results.averageInitTime=msg.results.averageInitTime+msg.payload.rawData[i].initTime;\n    initTime.push(msg.payload.rawData[i].initTime);\n    if (msg.payload.rawData[i].initTime!==0){\n        msg.results.coldStarts=msg.results.coldStarts+1;\n    }\n\n    msg.results.averageUserSideDelay=msg.results.averageUserSideDelay+(msg.payload.rawData[i].end-msg.payload.rawData[i].clientSample);\n    userSideDelay.push(msg.payload.rawData[i].end-msg.payload.rawData[i].clientSample);\n    \n    msg.results.averageStartLatency=msg.results.averageStartLatency+(msg.payload.rawData[i].start-msg.payload.rawData[i].clientSample);\n    startLatency.push(msg.payload.rawData[i].start-msg.payload.rawData[i].clientSample);\n    \n    if (msg.payload.rawData[i].success==='true'){\n        msg.results.successPercentage=msg.results.successPercentage+1;\n    }\n}\nmsg.results.averageDuration=toFixedNumber(msg.results.averageDuration/samples,2);\nmsg.results.averageWaitTime=toFixedNumber(msg.results.averageWaitTime/samples,2);\nmsg.results.averageInitTime=toFixedNumber(msg.results.averageInitTime/samples,2);\nmsg.results.averageUserSideDelay=toFixedNumber(msg.results.averageUserSideDelay/samples,2);\nmsg.results.averageStartLatency=toFixedNumber(msg.results.averageStartLatency/samples,2);\nmsg.results.successPercentage=100*(toFixedNumber(msg.results.successPercentage/samples,2));\n\nmsg.results.launchGeneratorDelay=toFixedNumber(msg.results.launchGeneratorDelay/samples,2);\n\n\n\nmsg.results.stdDevDuration=toFixedNumber(getStandardDeviation(duration),2);\nmsg.results.stdDevWaitTime=toFixedNumber(getStandardDeviation(waitTime),2);\nmsg.results.stdDevInitTime=toFixedNumber(getStandardDeviation(initTime),2);\nmsg.results.stdDevUserSideDelay=toFixedNumber(getStandardDeviation(userSideDelay),2);\nmsg.results.stdDevStartLatency=toFixedNumber(getStandardDeviation(startLatency),2);\n\n\n//REMOVED TO REDUCE DATA\n//msg.results.rawData=msg.payload;\n\n//msg.inputData.status='Continuing';\nmsg.results.inputData=msg.inputData;\nmsg.payload={};\nmsg.payload=msg.results;\nmsg.payload.status='Completed';\n//flow.set('stop',true);\nreturn msg;\n\nfunction getStandardDeviation (array) {\n  const n = array.length\n  const mean = array.reduce((a, b) => a + b) / n\n  return Math.sqrt(array.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / n)\n}\n\nfunction toFixedNumber(num, digits, base){\n  var pow = Math.pow(base||10, digits);\n  return Math.round(num*pow) / pow;\n}",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 960,
+        "y": 140,
+        "wires": [
+            [
+                "81c23e3b.691c1"
+            ]
+        ]
+    },
+    {
+        "id": "be4de3c1.f8d56",
+        "type": "debug",
+        "z": "69bc50ec.ed1228",
+        "name": "WAITING FOR ACTIVATION ID",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1240,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "494b4f60.d425",
+        "type": "function",
+        "z": "69bc50ec.ed1228",
+        "name": "if actID available",
+        "func": "function sayHi(input) {\n  if (flow.get('newActivationIDURL')===null) {\n    node.send([RED.util.cloneMessage(msg),null]);\n  } else {\n    msg.payload={};\n    msg.payload.newActivationIDURL=flow.get('newActivationIDURL');\n    msg.payload.status='Continuing';\n    node.send([null,RED.util.cloneMessage(msg)]);\n    clearTimeout(timerId);  \n  }\n}\n\nvar timerId=setInterval(sayHi, 5000,msg);\n",
+        "outputs": 2,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 960,
+        "y": 200,
+        "wires": [
+            [
+                "be4de3c1.f8d56"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "2cc78fc6.99be28",
+        "type": "debug",
+        "z": "69bc50ec.ed1228",
+        "name": "INPUT LOAD",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 160,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "176cc12a.0640ff",
+        "type": "debug",
+        "z": "69bc50ec.ed1228",
+        "name": "CONTINUE",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "x": 450,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "48f7b12409cf5b8f",
+        "type": "debug",
+        "z": "69bc50ec.ed1228",
+        "name": "INITIAL CALL RESULT",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 490,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "f81580b2bf9ad891",
+        "type": "http request",
+        "z": "8262c8e75cfbabdd",
+        "name": "",
+        "method": "use",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 290,
+        "y": 180,
+        "wires": [
+            [
+                "b61d171594e2cdf3"
+            ]
+        ]
+    },
+    {
+        "id": "408b32b6eb687a08",
+        "type": "function",
+        "z": "8262c8e75cfbabdd",
+        "name": "defaults",
+        "func": "if (msg.hasOwnProperty('window')){\n    \n} else {\n    msg.window=env.get('window');\n}\n\nif (msg.hasOwnProperty('targetEndpoint')){\n    \n} else {\n    msg.targetEndpoint=env.get('targetEndpoint');\n}\n\nif (msg.hasOwnProperty('pollingPeriod')){\n    \n} else {\n    msg.pollingPeriod=env.get('pollingPeriod');\n}\n\nif (msg.hasOwnProperty('creds')){\n    \n} else {\n    msg.creds=env.get('creds');\n}\n\nif (msg.hasOwnProperty('namespace')){\n    \n} else {\n    msg.namespace=env.get('namespace');\n}\n\nif (msg.hasOwnProperty('action')){\n    \n} else {\n    msg.action=env.get('action');\n}\n\nif (msg.hasOwnProperty('stop')){\n    flow.set('stop',msg.stop);\n} else {\n    flow.set('stop',false);\n}\n\nmsg.headers={};\nvar auth = 'Basic ' + new Buffer(msg.creds).toString('base64');\nmsg.headers = {\n    \"Authorization\": auth\n}\n\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 180,
+        "y": 80,
+        "wires": [
+            [
+                "e3862e86d11b08d5"
+            ]
+        ]
+    },
+    {
+        "id": "e3862e86d11b08d5",
+        "type": "function",
+        "z": "8262c8e75cfbabdd",
+        "name": "produce rate",
+        "func": "\nfunction sayHi(input) {\n  \n  if (flow.get('stop')) {\n    msg.payload=\"STOPPED\";\n    node.send([msg,null]);\n    clearTimeout(timerId);\n    \n  } else {\n      msg.since=Date.now()-msg.window*60*1000; //remove window of time from timestamp\n      //add since filter\n      msg.url=msg.baseurl+'?since='+msg.since;\n      msg.url=msg.url+'&limit=0';//by default, OW returns 30 results. We need this to return without limit\n      //add optional action name filter. This needs to be second since it may not always exist\n      if (msg.action!==\"\"){\n          msg.url=msg.url+'&name='+msg.action;\n      }\n\n      node.send([null,msg])\n      \n  }\n}\n\nmsg.baseurl=msg.targetEndpoint+'/namespaces/'+msg.namespace+'/activations';\n\nmsg.method='GET';\nvar timerId=setInterval(sayHi, msg.pollingPeriod*1000,msg);\n\n\n",
+        "outputs": "2",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 80,
+        "wires": [
+            [],
+            [
+                "f81580b2bf9ad891"
+            ]
+        ]
+    },
+    {
+        "id": "b61d171594e2cdf3",
+        "type": "function",
+        "z": "8262c8e75cfbabdd",
+        "name": "preprocess results",
+        "func": "\n\nvar resultsArray=[];\n\nvar results={};\n\nfor (let k=0;k<msg.payload.length;k++){\n    //from OW\n    results.duration=msg.payload[k].duration;\n    results.start=msg.payload[k].start;\n    results.end=msg.payload[k].end;\n    results.action=msg.payload[k].name;\n    results.namespace=msg.payload[k].namespace;\n    //results.success=msg.payload[k].response.success; This is not included in the summary results\n    for (let i=0;i<msg.payload[k].annotations.length;i++){\n        if (msg.payload[k].annotations[i].key==='waitTime'){\n            results.waitTime=msg.payload[k].annotations[i].value;\n        }\n        if (msg.payload[k].annotations[i].key==='initTime'){\n            results.initTime=msg.payload[k].annotations[i].value;\n        }\n        \n    }\n    \n    if (!(results.hasOwnProperty('initTime'))){\n        results.initTime=0;\n    }\n    if (msg.action===\"\"){\n        resultsArray.push(results);    \n    } else {\n        if (results.action===msg.action){\n            resultsArray.push(results);\n        }\n    }\n    \n    results={};\n    \n}    \nmsg.payload={};\nmsg.payload=resultsArray;\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 1,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 490,
+        "y": 180,
+        "wires": [
+            [
+                "fdcd7c09df04efbb"
+            ]
+        ]
+    },
+    {
+        "id": "10a43986c95ec05a",
+        "type": "comment",
+        "z": "8262c8e75cfbabdd",
+        "name": "PENDING",
+        "info": "check if the results are limited by something else, currently only 30 results are sent which seems los\n",
+        "x": 310,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "fdcd7c09df04efbb",
+        "type": "function",
+        "z": "8262c8e75cfbabdd",
+        "name": "averages",
+        "func": "var rawData=msg.payload;\nmsg.payload={};\nmsg.payload.rawData=rawData;\nvar samples=msg.payload.rawData.length;\n\nmsg.results={};\nmsg.results.averageDuration=0;\nmsg.results.averageWaitTime=0;\nmsg.results.averageInitTime=0;\nmsg.results.coldStarts=0;\n\nvar duration= [];//=new Array();\nvar waitTime=[];\nvar initTime=[];\n\n\nfor (let i=0;i<msg.payload.rawData.length;i++){\n    msg.results.averageDuration=msg.results.averageDuration+msg.payload.rawData[i].duration;\n    duration.push(msg.payload.rawData[i].duration);\n    \n    msg.results.averageWaitTime=msg.results.averageWaitTime+msg.payload.rawData[i].waitTime;\n    waitTime.push(msg.payload.rawData[i].waitTime);\n    \n    msg.results.averageInitTime=msg.results.averageInitTime+msg.payload.rawData[i].initTime;\n    initTime.push(msg.payload.rawData[i].initTime);\n    if (msg.payload.rawData[i].initTime!==0){\n        msg.results.coldStarts=msg.results.coldStarts+1;\n    }\n\n}\nmsg.results.averageDuration=toFixedNumber(msg.results.averageDuration/samples,2);\nmsg.results.averageWaitTime=toFixedNumber(msg.results.averageWaitTime/samples,2);\nmsg.results.averageInitTime=toFixedNumber(msg.results.averageInitTime/samples,2);\nmsg.results.coldStartPercentage=toFixedNumber((msg.results.coldStarts/samples)*100,2);\n\nmsg.results.movingAverageDuration=msg.results.averageDuration;\ndelete msg.results.averageDuration;\n\nmsg.results.movingAverageWaitTime=msg.results.averageWaitTime;\ndelete msg.results.averageWaitTime;\n\nmsg.results.movingAverageInitTime=msg.results.averageInitTime;\ndelete msg.results.averageInitTime;\n\n\nmsg.payload.results=msg.results;\nreturn msg;\n\n\nfunction toFixedNumber(num, digits, base){\n  var pow = Math.pow(base||10, digits);\n  return Math.round(num*pow) / pow;\n}\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 680,
+        "y": 180,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "3c9715a4.099cba",
+        "type": "http in",
+        "z": "a198f2db823f30da",
+        "name": "",
+        "url": "/init",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 400,
+        "y": 220,
+        "wires": [
+            [
+                "2859c26c.2b5f6e"
+            ]
+        ]
+    },
+    {
+        "id": "55513a04.98d734",
+        "type": "http in",
+        "z": "a198f2db823f30da",
+        "name": "",
+        "url": "/run",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 400,
+        "y": 320,
+        "wires": [
+            [
+                "184f0a1c.6da87e",
+                "28d40f8.2901a7"
+            ]
+        ]
+    },
+    {
+        "id": "2859c26c.2b5f6e",
+        "type": "http response",
+        "z": "a198f2db823f30da",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 710,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "d0e835c9.d424d",
+        "type": "http response",
+        "z": "a198f2db823f30da",
+        "name": "response",
+        "statusCode": "",
+        "headers": {},
+        "x": 920,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "bdc49a8e.708808",
+        "type": "comment",
+        "z": "a198f2db823f30da",
+        "name": "INPUT SPEC",
+        "info": "{\n - \"testName\":\"example test name\",\n - \"delay\":6000, //the inter-request delay for each invocation\n - \"testDuration\":60000, //total experiment duration in milliseconds\n - \"clientNumber\":0, //if one needs to deploy multiple clients, this can be used as a client ID\n - \"totalClients\":1, //total clients involved in the experiment\n - \"creds\":\"user:key\", //credentials on the OW infrastructure\n - \"endpointMethod\":\"GET\", //method to use against the target endpoint (the target of the load generator)\n - \"targetEndpoint\":\"http://10.100.59.182:3233/api/v1/web/guest/default/dockeraction.json?delay=1000\", //the target of the load generator, in this case an example other action in OW\n - \"methodPayload\": \"STRINGIFIED JSON input for POST calls on target endpoint\",\n - \"statusEndpoint\":\"http://10.100.59.182:3233/api/v1/namespaces/_/activations/\", //OW endpoint from which to retrieve the activation status\n - \"loadGenEndpoint\":\"http://10.100.59.182:3233/api/v1/namespaces/guest/actions/physicspef_loadgenclient\", //endpoint to initiate a new Load Generator, used in the function chaining process\n - \"nodeType\":\"physics_openwhisk:faas\", //used when the load generator runs as an action, alternatively the physics_openwhisk:local may be used for execution only inside Node-RED\n - \"otherInfo\":\"1000\", //tag for the experiment\n - \"status\":\"Started\",\n - \"parentSampleTime\":1652035259312, //this should be a timestamp just before the call is made to the load Generator\n - \"globalStartTime\":1652035259312 //this should be a timestamp just before the call is made to the load Generator\n}",
+        "x": 410,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "184f0a1c.6da87e",
+        "type": "debug",
+        "z": "a198f2db823f30da",
+        "name": "INPUT",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 400,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "810591fc.6ee0b8",
+        "type": "function",
+        "z": "a198f2db823f30da",
+        "name": "move to value",
+        "func": "var input=msg.payload;\nmsg.payload={};\nmsg.payload.value=input;\nmsg.payload.value.parentSampleTime=Date.now();\nmsg.payload.value.globalStartTime=Date.now();\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 140,
+        "y": 520,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "60fa7ae5.ff17c4",
+        "type": "inject",
+        "z": "a198f2db823f30da",
+        "name": "TEST INPUT",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "t",
+        "payload": "{\"testName\":\"local\",\"delay\":6000,\"testDuration\":60000,\"clientNumber\":0,\"totalClients\":3,\"creds\":\"23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP\",\"endpointMethod\":\"POST\",\"targetEndpoint\":\"172.17.0.1:3233/api/v1/namespaces/guest/actions/octavefunction\",\"methodPayload\":{\"inputs\":[{\"input1\":\"4\",\"input2\":\"50\"},{\"input1\":\"4\",\"input2\":\"250\"},{\"input1\":\"2\",\"input2\":\"150\"},{\"input1\":\"4\",\"input2\":\"150\"}],\"modelID\":\"HTCORRECTED\"},\"statusEndpoint\":\"172.17.0.1:3233/api/v1/namespaces/_/activations/\",\"loadGenEndpoint\":\"172.17.0.1:3233/api/v1/namespaces/guest/actions/physicspef_loadgenclient\",\"nodeType\":\"physics_openwhisk:local\",\"otherInfo\":\"1000\",\"status\":\"Started\"}",
+        "payloadType": "json",
+        "x": 190,
+        "y": 720,
+        "wires": [
+            [
+                "7fcc1ca2791e717d",
+                "567a27efa2a58c3c"
+            ]
+        ]
+    },
+    {
+        "id": "a602ec2b.6b5258",
+        "type": "comment",
+        "z": "a198f2db823f30da",
+        "name": "USAGE IN STANDALONE NODE-RED ",
+        "info": "",
+        "x": 510,
+        "y": 600,
+        "wires": []
+    },
+    {
+        "id": "28d40f8.2901a7",
+        "type": "subflow:69bc50ec.ed1228",
+        "z": "a198f2db823f30da",
+        "name": "",
+        "env": [],
+        "x": 680,
+        "y": 320,
+        "wires": [
+            [
+                "d0e835c9.d424d",
+                "6ff2affc.f3cb88"
+            ],
+            [
+                "d0e835c9.d424d",
+                "57adea9d.f9a1ac"
+            ]
+        ]
+    },
+    {
+        "id": "b91dfffe.358b3",
+        "type": "comment",
+        "z": "a198f2db823f30da",
+        "name": "RESULT SPEC",
+        "info": "{\n   \"achievedAverageRate\":4.73,\n   \"action\":\"dockeraction\",\n   \"actualStartTime\":1652036057734,\n   \"averageDuration\":6969.6,\n   \"averageInitTime\":3941.2,\n   \"averageStartLatency\":1790.6,\n   \"averageUserSideDelay\":8760.2,\n   \"averageWaitTime\":1755.4,\n   \"clientNumber\":0,\n   \"coldStarts\":3,\n   \"globalStartTime\":1652036048322,\n   \"inputData\":{}\n    \"rawData\":[\n         {\n            \"action\":\"dockeraction\",\n            \"actualStartTime\":1652036057734,\n            \"clientNumber\":0,\n            \"clientSample\":1652036063739,\n            \"duration\":9617,\n            \"end\":1652036076399,\n            \"globalStartTime\":1652036048322,\n            \"initTime\":6587,\n            \"memory\":256,\n            \"namespace\":\"guest\",\n            \"otherInfo\":1000,\n            \"parentSampleTime\":1652036048322,\n            \"setRate\":10,\n            \"start\":1652036066782,\n            \"success\":\"true\",\n            \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n            \"testSetDuration\":60000,\n            \"waitTime\":2912\n         },...]\n        \"launchGeneratorDelay\":9412,\n   \"memory\":256,\n   \"otherInfo\":\"1000\",\n   \"parentSampleTime\":1652036048322,\n   \"sampleNumber\":5,\n   \"setRate\":10,\n   \"status\":\"Completed\",\n   \"stdDevDuration\":3219.96,\n   \"stdDevInitTime\":3217.99,\n   \"stdDevStartLatency\":1331.76,\n   \"stdDevUserSideDelay\":4549.64,\n   \"stdDevWaitTime\":1308.51,\n   \"successPercentage\":100,\n   \"testName\":\"openwhisk_ow_long_12_1_10_1\",\n   \"testSetDuration\":60000,\n   \"totalClients\":1\n}\nstart, end, waitTime,initTime, memory, duration from OW data\n\ntestname, set rate (delay), parentSampleTime, testSetDuration from input\n\nclientSample from this flow for checking the sample rate\n\n_averageStartLatency_: actualStartTime for checking difference between parentSampleTime (request for the generator)\nand actual startup of the generator\n\n_averageUserDelay_: end timestamp from OW-clientSample could be used to indicate the total time\nof the experienced request from the user side (client),including network\nlatency plus some queues in OW, given that the start time seems to be the start of the action, assuming that the clocks on the two sides (client and server) are synchronized\nthrough e.g. a network clock\n\n_averageStartLatency_:start timestamp from OW-clientSample could be used to indicate network latency as\nwell as any startup delay in OW queues?check the latter, if this start of OW is when\nit was received by the system and not when the action started we would have only\nthe pure network latency. Seems relevant to the waitTime reported by OW, so this metric-waitTime\nwould probably reflect very well the network latency",
+        "x": 900,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "6ff2affc.f3cb88",
+        "type": "debug",
+        "z": "a198f2db823f30da",
+        "name": "from normal",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 880,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "57adea9d.f9a1ac",
+        "type": "debug",
+        "z": "a198f2db823f30da",
+        "name": "from reactivation",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 890,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "88d4780c9ad064b2",
+        "type": "comment",
+        "z": "a198f2db823f30da",
+        "name": "OW ACTION INTERFACE",
+        "info": "",
+        "x": 450,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "c19bf4c7fb67c23a",
+        "type": "inject",
+        "z": "a198f2db823f30da",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 240,
+        "y": 60,
+        "wires": [
+            [
+                "0e4a6e1b5c7421b1"
+            ]
+        ]
+    },
+    {
+        "id": "0e4a6e1b5c7421b1",
+        "type": "exec",
+        "z": "a198f2db823f30da",
+        "command": "/home/stelios/Desktop/scrp/t.sh",
+        "addpay": "",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": false,
+        "oldrc": false,
+        "name": "ACTUAL_TEST_INPUT",
+        "x": 510,
+        "y": 60,
+        "wires": [
+            [
+                "72c04e834171b2da",
+                "f9e1e8e8d61c39e8"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "72c04e834171b2da",
+        "type": "debug",
+        "z": "a198f2db823f30da",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 840,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "f9e1e8e8d61c39e8",
+        "type": "json",
+        "z": "a198f2db823f30da",
+        "name": "",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 950,
+        "y": 100,
+        "wires": [
+            [
+                "6a676e828955f0b5"
+            ]
+        ]
+    },
+    {
+        "id": "6a676e828955f0b5",
+        "type": "debug",
+        "z": "a198f2db823f30da",
+        "name": "debug 3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1120,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "567a27efa2a58c3c",
+        "type": "exec",
+        "z": "a198f2db823f30da",
+        "command": "date +%s%N | cut -b1-13",
+        "addpay": "",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": false,
+        "oldrc": false,
+        "name": "",
+        "x": 410,
+        "y": 780,
+        "wires": [
+            [
+                "109476e59826ef9d"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "7fcc1ca2791e717d",
+        "type": "join",
+        "z": "a198f2db823f30da",
+        "name": "",
+        "mode": "custom",
+        "build": "merged",
+        "property": "payload",
+        "propertyType": "msg",
+        "key": "topic",
+        "joiner": "\\n",
+        "joinerType": "str",
+        "accumulate": false,
+        "timeout": "",
+        "count": "16",
+        "reduceRight": false,
+        "reduceExp": "",
+        "reduceInit": "",
+        "reduceInitType": "num",
+        "reduceFixup": "",
+        "x": 770,
+        "y": 700,
+        "wires": [
+            [
+                "2aa2860507c97b9a"
+            ]
+        ]
+    },
+    {
+        "id": "109476e59826ef9d",
+        "type": "function",
+        "z": "a198f2db823f30da",
+        "name": "function 1",
+        "func": "var input = msg.payload;\nmsg.payload = {};\nmsg.topic = 'time';\nmsg.payload.parentSampleTime = Number(input);\nmsg.payload.globalStartTime = Number(input);\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 660,
+        "y": 780,
+        "wires": [
+            [
+                "7fcc1ca2791e717d"
+            ]
+        ]
+    },
+    {
+        "id": "2aa2860507c97b9a",
+        "type": "function",
+        "z": "a198f2db823f30da",
+        "name": "function 2",
+        "func": "var input = msg.payload;\nmsg.payload = {};\nmsg.payload.value = input;\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1040,
+        "y": 760,
+        "wires": [
+            [
+                "28d40f8.2901a7",
+                "f3ec753be1a21f0f"
+            ]
+        ]
+    },
+    {
+        "id": "f3ec753be1a21f0f",
+        "type": "debug",
+        "z": "a198f2db823f30da",
+        "name": "debug 4",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1180,
+        "y": 560,
+        "wires": []
+    },
+    {
+        "id": "6f92d873678bcd26",
+        "type": "inject",
+        "z": "8b81c4b76d40c840",
+        "name": "start",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 370,
+        "y": 300,
+        "wires": [
+            [
+                "5b6b2a38c50d3493"
+            ]
+        ]
+    },
+    {
+        "id": "aac7a66d929ecefa",
+        "type": "debug",
+        "z": "8b81c4b76d40c840",
+        "name": "MONITOR",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 870,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "adc7784d05984a40",
+        "type": "debug",
+        "z": "8b81c4b76d40c840",
+        "name": "STOP",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 850,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "cf1eadb38ea3bced",
+        "type": "inject",
+        "z": "8b81c4b76d40c840",
+        "name": "stop",
+        "props": [
+            {
+                "p": "stop",
+                "v": "true",
+                "vt": "bool"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 370,
+        "y": 400,
+        "wires": [
+            [
+                "5b6b2a38c50d3493"
+            ]
+        ]
+    },
+    {
+        "id": "5b6b2a38c50d3493",
+        "type": "subflow:8262c8e75cfbabdd",
+        "z": "8b81c4b76d40c840",
+        "name": "",
+        "env": [
+            {
+                "name": "targetEndpoint",
+                "value": "172.17.0.1:3233/api/v1",
+                "type": "str"
+            },
+            {
+                "name": "window",
+                "value": "10000",
+                "type": "num"
+            },
+            {
+                "name": "action",
+                "value": "octavefunction",
+                "type": "str"
+            },
+            {
+                "name": "creds",
+                "type": "cred"
+            }
+        ],
+        "x": 610,
+        "y": 340,
+        "wires": [
+            [
+                "aac7a66d929ecefa",
+                "298f6da6265b3f8f",
+                "db93a5eb25559e16",
+                "e6250eb3a1eea1ec",
+                "4870b63f28938f9a"
+            ],
+            [
+                "adc7784d05984a40"
+            ]
+        ]
+    },
+    {
+        "id": "ce2bd1b782bf2b73",
+        "type": "ui_gauge",
+        "z": "8b81c4b76d40c840",
+        "name": "Cold Starts",
+        "group": "93b3f6885ccc5f8e",
+        "order": 0,
+        "width": 0,
+        "height": 0,
+        "gtype": "gage",
+        "title": "Cold Starts",
+        "label": "units",
+        "format": "{{value}}",
+        "min": 0,
+        "max": "50",
+        "colors": [
+            "#edd400",
+            "#f57900",
+            "#ca3838"
+        ],
+        "seg1": "",
+        "seg2": "",
+        "className": "",
+        "x": 1010,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "ccf6a22bbf6e5cb6",
+        "type": "ui_chart",
+        "z": "8b81c4b76d40c840",
+        "name": "movingAverageDuration",
+        "group": "c554d8a8aa6f6c0e",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "label": "movingAverageDuration",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "",
+        "dot": false,
+        "ymin": "",
+        "ymax": "",
+        "removeOlder": 1,
+        "removeOlderPoints": "",
+        "removeOlderUnit": "3600",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#1f77b4",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 1050,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "864b495a4827b04a",
+        "type": "ui_chart",
+        "z": "8b81c4b76d40c840",
+        "name": "movingAverageWaitTime",
+        "group": "72dcfa4218c95cfd",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "label": "movingAverageWaitTime",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "",
+        "dot": false,
+        "ymin": "",
+        "ymax": "",
+        "removeOlder": 1,
+        "removeOlderPoints": "",
+        "removeOlderUnit": "3600",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#1f77b4",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 1050,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "47eecb81f27f3f32",
+        "type": "ui_chart",
+        "z": "8b81c4b76d40c840",
+        "name": "movingAverageInitTime",
+        "group": "ed9cdbc891089d9c",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "label": "movingAverageInitTime",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "",
+        "dot": false,
+        "ymin": "",
+        "ymax": "",
+        "removeOlder": 1,
+        "removeOlderPoints": "",
+        "removeOlderUnit": "3600",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#1f77b4",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 1050,
+        "y": 280,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "298f6da6265b3f8f",
+        "type": "function",
+        "z": "8b81c4b76d40c840",
+        "name": "function 3",
+        "func": "let input = msg.payload;\nmsg.payload = input.results.movingAverageDuration;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 60,
+        "wires": [
+            [
+                "ccf6a22bbf6e5cb6"
+            ]
+        ]
+    },
+    {
+        "id": "db93a5eb25559e16",
+        "type": "function",
+        "z": "8b81c4b76d40c840",
+        "name": "function 4",
+        "func": "let input = msg.payload;\nmsg.payload = input.results.movingAverageWaitTime;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 120,
+        "wires": [
+            [
+                "864b495a4827b04a",
+                "cf19f5bbc1fb2f77"
+            ]
+        ]
+    },
+    {
+        "id": "e6250eb3a1eea1ec",
+        "type": "function",
+        "z": "8b81c4b76d40c840",
+        "name": "function 5",
+        "func": "let input = msg.payload;\nmsg.payload = input.results.movingAverageInitTime;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 280,
+        "wires": [
+            [
+                "47eecb81f27f3f32"
+            ]
+        ]
+    },
+    {
+        "id": "4870b63f28938f9a",
+        "type": "function",
+        "z": "8b81c4b76d40c840",
+        "name": "function 6",
+        "func": "let input = msg.payload;\nmsg.payload = input.results.coldStarts;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 340,
+        "wires": [
+            [
+                "ce2bd1b782bf2b73"
+            ]
+        ]
+    },
+    {
+        "id": "cf19f5bbc1fb2f77",
+        "type": "rbe",
+        "z": "8b81c4b76d40c840",
+        "name": "High wait time",
+        "func": "deadband",
+        "gap": "3",
+        "start": "",
+        "inout": "out",
+        "septopics": true,
+        "property": "payload",
+        "topi": "topic",
+        "x": 860,
+        "y": 200,
+        "wires": [
+            [
+                "e5b984f93da287ca"
+            ]
+        ]
+    },
+    {
+        "id": "e5b984f93da287ca",
+        "type": "debug",
+        "z": "8b81c4b76d40c840",
+        "name": "Polling changed",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1100,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "a6f75ab71ffa27bb",
+        "type": "function",
+        "z": "8b81c4b76d40c840",
+        "name": "get action info",
+        "func": "\nmsg.baseurl = '172.17.0.1:3233/api/v1/namespaces/guest/actions/octavefunction';\nmsg.url = msg.baseurl;\nmsg.method = 'GET';\nmsg.headers = {};\nvar auth = 'Basic ' + new Buffer('23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP').toString('base64');\nmsg.headers = {\n    \"Authorization\": auth\n}\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 300,
+        "y": 780,
+        "wires": [
+            [
+                "68bc0b2e1159da38"
+            ]
+        ]
+    },
+    {
+        "id": "8490de60ae86c39a",
+        "type": "debug",
+        "z": "8b81c4b76d40c840",
+        "name": "ACTION INFO",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 880,
+        "y": 780,
+        "wires": []
+    },
+    {
+        "id": "d41bda981e059354",
+        "type": "inject",
+        "z": "8b81c4b76d40c840",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 100,
+        "y": 780,
+        "wires": [
+            [
+                "a6f75ab71ffa27bb"
+            ]
+        ]
+    },
+    {
+        "id": "68bc0b2e1159da38",
+        "type": "http request",
+        "z": "8b81c4b76d40c840",
+        "name": "",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 490,
+        "y": 780,
+        "wires": [
+            [
+                "de09dae8d78d27b6"
+            ]
+        ]
+    },
+    {
+        "id": "de09dae8d78d27b6",
+        "type": "json",
+        "z": "8b81c4b76d40c840",
+        "name": "",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 670,
+        "y": 780,
+        "wires": [
+            [
+                "8490de60ae86c39a"
+            ]
+        ]
+    },
+    {
+        "id": "703f272c7c6cec90",
+        "type": "inject",
+        "z": "8b81c4b76d40c840",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 100,
+        "y": 720,
+        "wires": [
+            [
+                "cc6b97437500a5dc"
+            ]
+        ]
+    },
+    {
+        "id": "5d6b5c3060d2dc12",
+        "type": "json",
+        "z": "8b81c4b76d40c840",
+        "name": "",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 670,
+        "y": 720,
+        "wires": [
+            [
+                "1c73858d61cb9b64"
+            ]
+        ]
+    },
+    {
+        "id": "1c73858d61cb9b64",
+        "type": "debug",
+        "z": "8b81c4b76d40c840",
+        "name": "ACTION UPDATE",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 890,
+        "y": 720,
+        "wires": []
+    },
+    {
+        "id": "6e6bc2085cb088b5",
+        "type": "http request",
+        "z": "8b81c4b76d40c840",
+        "name": "",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 490,
+        "y": 720,
+        "wires": [
+            [
+                "5d6b5c3060d2dc12"
+            ]
+        ]
+    },
+    {
+        "id": "cc6b97437500a5dc",
+        "type": "function",
+        "z": "8b81c4b76d40c840",
+        "name": "function 7",
+        "func": "\nmsg.baseurl = '172.17.0.1:3233/api/v1/namespaces/guest/actions/octavefunction?overwrite=true';\nmsg.url = msg.baseurl;\nmsg.payload = {\n    \"namespace\": \"guest\",\n    \"name\": \"octavefunction\",\n    \"version\": \"0.0.1\",\n    \"publish\": false,\n    \"exec\": {\n        \"kind\": \"blackbox\",\n        \"image\": \"gkousiou/octavefunction2\",\n        \"binary\": false\n    },\n    \"annotations\": [{ \n        \"key\": \"web-export\", \n        \"value\": true \n        }, \n        { \n            \"key\": \"raw-http\", \n            \"value\": false \n        }, { \n            \"key\": \"final\", \n            \"value\": true \n        }, { \n            \"key\": \"provide-api-key\", \n            \"value\": false \n        }, { \n            \"key\": \"exec\", \n            \"value\": \"blackbox\" \n        }\n    ],\n    \"parameters\": [\n    ],\n    \"limits\": {\n        \"timeout\": 300000,\n        \"memory\": 256,\n        \"logs\": 10,\n        \"concurrency\": 1\n    }\n}\nmsg.method = 'PUT';\nmsg.headers = {};\nvar auth = 'Basic ' + new Buffer('23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP').toString('base64');\nmsg.headers = {\n    \"Authorization\": auth\n}\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 300,
+        "y": 720,
+        "wires": [
+            [
+                "6e6bc2085cb088b5"
+            ]
+        ]
+    }
+]
